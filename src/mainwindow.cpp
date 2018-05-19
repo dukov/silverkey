@@ -196,6 +196,8 @@ void MainWindow::keyPressEvent(QKeyEvent *e) {
 void MainWindow::SearchEvent() {
     FuzzyCompleter *c = completer();
     c->update(text());
+    QModelIndex ind = c->popup()->model()->index(0,0);
+    c->popup()->setCurrentIndex(ind);
 }
 
 void MainWindow::showSettings() {

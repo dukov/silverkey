@@ -66,6 +66,8 @@ public:
     FuzzyCompleter *completer() const;
 
 
+public Q_SLOTS:
+    void setHighlightedText(QString txt);
 private:
     FuzzyCompleter *c;
 };

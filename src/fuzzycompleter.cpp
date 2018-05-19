@@ -142,6 +142,17 @@ void FuzzyLineEdit::setCompleter(FuzzyCompleter *completer) {
     QObject::connect(this->completer(), SIGNAL(activated(QString)),
                      this, SLOT(setText(QString)));
     QObject::connect(this->completer(), SIGNAL(highlighted(QString)),
-                     this, SLOT(setText(QString)));
+                     this, SLOT(setHighlightedText(QString)));
 }
 
+void FuzzyLineEdit::setHighlightedText(QString txt) {
+    int cur = cursorPosition();
+    QString lp = text().left(cur);
+    if (txt.contains(lp)) {
+        setText(txt);
+        setCursorPosition(cur);
+        setSelection(cur+1, txt.length());
+    } else {
+        setText(txt);
+    }
+}
