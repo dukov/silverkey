@@ -29,7 +29,8 @@ SOURCES += \
         fuzzycompleter.cpp \
         sksettings.cpp \
         robothelper.cpp \
-    requester.cpp
+    requester.cpp \
+    traywidget.cpp
 
 HEADERS += \
         mainwindow.h \
@@ -37,7 +38,8 @@ HEADERS += \
         sksettings.h \
         robothelper.h \
         hotkeys.h \
-    requester.h
+    requester.h \
+    traywidget.h
 
 FORMS += \
         mainwindow.ui \
