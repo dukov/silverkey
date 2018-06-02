@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "traywidget.h"
 #include "robothelper.h"
 #include <iostream>
 #include <QApplication>
@@ -14,24 +15,43 @@
 #include <QFutureWatcher>
 #include <QtConcurrent/QtConcurrentRun>
 #include <QClipboard>
+#include <QMessageBox>
+#include <QLocalSocket>
+#include <QIODevice>
 ROBOT_NS_USE_ALL;
 
 
 void show_window(int argc, char *argv[], int fd = 0, bool child = false) {
+    qDebug() << "Creating QApplication";
     QApplication a(argc, argv);
-    MainWindow w;
+    qDebug() << "Creating Main Window";
+    std::unique_ptr<MainWindow> wPtr;
+    std::unique_ptr<TrayWidget> twPtr;
+
+    QLocalSocket *p = new QLocalSocket();
+    p->connectToServer("SKTrayApp", QIODevice::WriteOnly);
+    bool connected = p->waitForConnected(1000);
+    qDebug() << "Connected to server " << connected;
+    if (!connected) {
+        qDebug() << "Connected";
+        twPtr.reset(new TrayWidget());
+    } else {
+
+        wPtr.reset(new MainWindow());
 
     if (child) {
-        w.setWriteFd(fd);
+        wPtr->setWriteFd(fd);
     }
 
-    w.setAttribute(Qt::WA_DeleteOnClose);
+    wPtr->setAttribute(Qt::WA_DeleteOnClose);
 
-    w.show();
+    wPtr->show();
 
-    w.raise();  // for MacOS
-    w.activateWindow(); // for Windows
+    wPtr->raise();  // for MacOS
+    wPtr->activateWindow(); // for Windows
+    }
 
+    qDebug() << "Setting qApp event loop";
     qDebug() << a.exec();
 }
 
@@ -64,10 +84,13 @@ void main_with_fork(int argc, char *argv[]) {
     if (pid == 0) {
         close(fd[0]);
         show_window(argc, argv, fd[1], true);
+        qDebug() << "Stopped qApp loop";
         close(fd[1]);
     } else {
         close(fd[1]);
-        wait(NULL);
+        int status;
+        wait(&status);
+        qDebug() << "Child status: " << status;
 
         std::string dbVal;
         char ch;
