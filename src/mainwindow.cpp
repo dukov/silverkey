@@ -21,14 +21,17 @@
 #include <QPushButton>
 #include <QClipboard>
 #include <QMimeData>
+#include <QSizePolicy>
 ROBOT_NS_USE_ALL;
 
 
 MainWindow::MainWindow(QWidget *parent) :
     QDialog(parent)
 {
-    httpClient = new Requester(this);
-    connectDB();
+    clientSocket = new QLocalSocket();
+    clientSocket->connectToServer("SKTrayApp");
+    in.setDevice(clientSocket);
+    in.setVersion(QDataStream::Qt_5_10);
 
     setObjectName("skDialog");
 
@@ -36,103 +39,13 @@ MainWindow::MainWindow(QWidget *parent) :
     setAttribute(Qt::WA_TranslucentBackground);
     setWindowFlags(Qt::FramelessWindowHint);
 
-    lineEdit = new FuzzyLineEdit(this);
-    lineEdit->setObjectName("skInput");
-    lineEdit->setFocusPolicy(Qt::StrongFocus);
-    lineEdit->setFocus();
-    lineEdit->setGeometry(0, 0, 500, 50);
-    lineEdit->setStyleSheet(
-                  "#skInput {"
-                    "background-color: #f6f6f6;"
-                    "border-radius: 10px;"
-                    "font: 30pt Courier"
-                  "}"
-                );
-    lineEdit->setTextMargins(5, 0, 0, 0);
-    lineEdit->setAttribute(Qt::WA_MacShowFocusRect, false);
+    createSettingsButton();
+    createLineEdit();
+    createAddButton();
+    createTextEdit();
 
-    getDbData();
-    connect(this, &MainWindow::dataLoaded, this, &MainWindow::handleDataLoad);
-    connect(this, &MainWindow::gotReplyFromDB, this, &MainWindow::doHide);
+    activateWindow();
 
-    settingsButton = new QPushButton("",this);
-    settingsButton->setObjectName("settings");
-    settingsButton->setStyleSheet("#settings {"
-                                  "border-image:url(:/images/if_cog_35873.png);"
-                                  "}"
-                                  "#settings:pressed {"
-                                  "border-image:url(:/images/if_cog_35873_pressed.png);"
-                                  "}");
-    settingsButton->resize(QImage(":/images/if_cog_35873.png").size());
-    settingsButton->setGeometry(
-                QStyle::alignedRect(
-                    Qt::LeftToRight,
-                    Qt::AlignTop|Qt::AlignLeft,
-                    settingsButton->size(),
-                    this->geometry()
-                ));
-
-    addDataButton = new QPushButton("", this);
-    addDataButton->setObjectName("addData");
-    addDataButton->setStyleSheet("#addData {"
-                                 "border-image:url(:/images/if_edit_add_7710.png);"
-                                 "}"
-                                 "#addData:pressed {"
-                                 "border-image:url(:/images/if_edit_add_7710_pressed.png);"
-                                 "}");
-    addDataButton->resize(QImage(":/images/if_edit_add_7710.png").size());
-
-
-    lineEdit->move(settingsButton->x() + settingsButton->width() + widgetPadding,
-                   settingsButton->y());
-
-    int x = lineEdit->x() +
-            lineEdit->width() +
-            widgetPadding;
-    addDataButton->move(x, settingsButton->y());
-
-
-    clipboardData = new QTextEdit(this);
-    clipboardData->setObjectName("clipboardData");
-    clipboardData->setGeometry(x, settingsButton->y(), 500, 300);
-    clipboardData->setStyleSheet(
-                  "#clipboardData {"
-                    "background-color: #f6f6f6;"
-                    "border-radius: 10px;"
-                    "font: 20pt Courier"
-                  "}"
-                );
-    clipboardData->hide();
-
-    FuzzyCompleter *completer = new FuzzyCompleter(this);
-    FuzzyPopup *popup = new FuzzyPopup();
-    popup->setObjectName("skPopup");
-    popup->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    popup->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    popup->setSelectionBehavior(QAbstractItemView::SelectRows);
-    popup->setSelectionMode(QAbstractItemView::SingleSelection);
-    completer->setPopup(popup);
-    completer->setCaseSensitivity(Qt::CaseInsensitive);
-    completer->popup()->setStyleSheet("#skPopup {"
-                                        "background-color: #f6f6f6;"
-                                        "font: 20pt Courier"
-                                      "}");
-    lineEdit->setCompleter(completer);
-    QAbstractItemView *abstractItemView = lineEdit->completer()->popup();
-
-
-    connect(lineEdit, &QLineEdit::returnPressed, this, &MainWindow::EnterPressed);
-    connect(abstractItemView, &QAbstractItemView::clicked, this, &MainWindow::EnterPressed);
-    connect(popup, &FuzzyPopup::popupShow, this, &MainWindow::setAngleCorners);
-    connect(popup, &FuzzyPopup::popupHide, this, &MainWindow::setRoundedCorners);
-
-    connect(lineEdit, &QLineEdit::textEdited, this, &MainWindow::SearchEvent);
-    connect(lineEdit, &FuzzyLineEdit::hideApp, this, &MainWindow::escapePressed);
-
-    connect(settingsButton, &QPushButton::clicked, this, &MainWindow::showSettings);
-    connect(addDataButton, &QPushButton::clicked, this, &MainWindow::showTextEdit);
-
-    this->activateWindow();
     QFocusEvent* eventFocus = new QFocusEvent(QEvent::FocusIn);
     qApp->postEvent(this, (QEvent *)eventFocus, Qt::LowEventPriority);
 
@@ -157,13 +70,14 @@ MainWindow::MainWindow(QWidget *parent) :
         )
     );
 
-    lockInput();
     int w = settingsButton->width() +
             widgetPadding +
             lineEdit->width() +
             widgetPadding +
             addDataButton->width();
     resize(w,lineEdit->height());
+
+    getDbData();
     registerService();
 }
 
@@ -189,12 +103,12 @@ void MainWindow::handleDataLoad() {
         qDebug() << "Reply: " << reply;
         if (reply == 0) {
             lineEdit->setSelectedItem("");
-            this->hide();
+            doHide();
         } else {
-            this->showSettings();
+            showSettings();
         }
     } else {
-        this->unlockInput();
+        unlockInput();
     }
 
 }
@@ -205,77 +119,166 @@ void MainWindow::doHide()
     this->hide();
 }
 
+void MainWindow::createSettingsButton()
+{
+    QSizePolicy *p = new QSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    settingsButton = new QPushButton("",this);
+    settingsButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    settingsButton->setObjectName("settings");
+    settingsButton->setStyleSheet("#settings {"
+                                  "border-image:url(:/images/if_cog_35873.png);"
+                                  "}"
+                                  "#settings:pressed {"
+                                  "border-image:url(:/images/if_cog_35873_pressed.png);"
+                                  "}");
+    settingsButton->resize(QImage(":/images/if_cog_35873.png").size());
+    settingsButton->setGeometry(
+                QStyle::alignedRect(
+                    Qt::LeftToRight,
+                    Qt::AlignTop|Qt::AlignLeft,
+                    settingsButton->size(),
+                    this->geometry()
+                ));
+    connect(settingsButton, &QPushButton::clicked, this, &MainWindow::showSettings);
+}
+
+void MainWindow::createLineEdit()
+{
+    lineEdit = new FuzzyLineEdit(this);
+    lineEdit->setObjectName("skInput");
+    lineEdit->setFocusPolicy(Qt::StrongFocus);
+    lineEdit->setFocus();
+    lineEdit->setGeometry(0, 0, 500, 50);
+    lineEdit->setStyleSheet(
+                  "#skInput {"
+                    "background-color: #f6f6f6;"
+                    "border-radius: 10px;"
+                    "font: 30pt Courier"
+                  "}"
+                );
+    lineEdit->setTextMargins(5, 0, 0, 0);
+    lineEdit->setAttribute(Qt::WA_MacShowFocusRect, false);
+
+    lineEdit->move(settingsButton->x() + settingsButton->width() + widgetPadding,
+                   settingsButton->y());
+
+    FuzzyCompleter *completer = new FuzzyCompleter(this);
+    FuzzyPopup *popup = new FuzzyPopup();
+    popup->setObjectName("skPopup");
+    popup->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    popup->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    popup->setSelectionBehavior(QAbstractItemView::SelectRows);
+    popup->setSelectionMode(QAbstractItemView::SingleSelection);
+    completer->setPopup(popup);
+    completer->setCaseSensitivity(Qt::CaseInsensitive);
+    completer->popup()->setStyleSheet("#skPopup {"
+                                        "background-color: #f6f6f6;"
+                                        "font: 20pt Courier"
+                                      "}");
+    lineEdit->setCompleter(completer);
+    QAbstractItemView *abstractItemView = lineEdit->completer()->popup();
+
+
+    connect(lineEdit, &QLineEdit::returnPressed, this, &MainWindow::enterPressed);
+    connect(abstractItemView, &QAbstractItemView::clicked, this, &MainWindow::enterPressed);
+    connect(popup, &FuzzyPopup::popupShow, this, &MainWindow::setAngleCorners);
+    connect(popup, &FuzzyPopup::popupHide, this, &MainWindow::setRoundedCorners);
+
+    connect(lineEdit, &QLineEdit::textEdited, this, &MainWindow::searchEvent);
+    connect(lineEdit, &FuzzyLineEdit::hideApp, this, &MainWindow::escapePressed);
+}
+
+void MainWindow::createAddButton()
+{
+    addDataButton = new QPushButton("", this);
+    addDataButton->setObjectName("addData");
+    addDataButton->setStyleSheet("#addData {"
+                                 "border-image:url(:/images/if_edit_add_7710.png);"
+                                 "}"
+                                 "#addData:pressed {"
+                                 "border-image:url(:/images/if_edit_add_7710_pressed.png);"
+                                 "}");
+    addDataButton->resize(QImage(":/images/if_edit_add_7710.png").size());
+
+    int x = lineEdit->x() +
+            lineEdit->width() +
+            widgetPadding;
+    addDataButton->move(x, settingsButton->y());
+
+    connect(addDataButton, &QPushButton::clicked, this, &MainWindow::showTextEdit);
+
+}
+
+void MainWindow::createTextEdit()
+{
+    clipboardData = new QTextEdit(this);
+    clipboardData->setObjectName("clipboardData");
+    int x = lineEdit->x() +
+            lineEdit->width() +
+            widgetPadding;
+    clipboardData->setGeometry(x, settingsButton->y(), 500, 300);
+    clipboardData->setStyleSheet(
+                  "#clipboardData {"
+                    "background-color: #f6f6f6;"
+                    "border-radius: 10px;"
+                    "font: 20pt Courier"
+                  "}"
+                );
+    clipboardData->hide();
+}
+
 void MainWindow::getVal(QString key) {
-    qDebug() << "Getting value from DB";
-    Requester::handleFunc getData = [this](const QJsonObject &o) {
-        this->data = o.value("node").toObject().value("value").toString();
-        qDebug() << "Got data " << this->data;
-        emit this->gotReplyFromDB();
-    };
 
-    Requester::handleFunc errData = [this](const QJsonObject &o) {
-        qDebug() << "Error retrieving key";
-        emit this->gotReplyFromDB();
-    };
-
-
-    httpClient->sendRequest("v2/keys" + key, getData, errData);
+    QByteArray block;
+    QDataStream out(&block, QIODevice::WriteOnly);
+    out.setVersion(QDataStream::Qt_5_10);
+    out << QString("get");
+    out << key;
+    clientSocket->write(block);
+    clientSocket->flush();
+    if (clientSocket->waitForReadyRead()) {
+        qDebug() << "Got reply from server";
+        in >> data;
+        doHide();
+    }
 }
 
 void MainWindow::setVal(QString key, QString val) {
     qDebug() << "Setting value to DB" << val;
-    Requester::handleFunc getData = [this](const QJsonObject &o) {
-        QString resp = o.value("node").toObject().value("value").toString();
-        qDebug() << "Successfully written data"<< resp;
-        emit this->gotReplyFromDB();
-    };
-
-    Requester::handleFunc errData = [](const QJsonObject &o) {
-        qDebug() << "Error writing data";
-    };
-    QString path;
-    if (key[0] != '/') {
-        path = "v2/keys/" + key;
-    } else {
-        path = "v2/keys" + key;
-    }
-
-    QByteArray encodedVal = QUrl::toPercentEncoding(val);
-    httpClient->sendRequest(path,
-                            getData,
-                            errData,
-                            Requester::Type::PUT,
-                            "value=" + encodedVal);
+    QByteArray block;
+    QDataStream out(&block, QIODevice::WriteOnly);
+    out.setVersion(QDataStream::Qt_5_10);
+    out << QString("put");
+    out << key;
+    out << val;
+    clientSocket->write(block);
+    clientSocket->flush();
+    doHide();
 }
-
-void MainWindow::connectDB()
-{
-    QSettings settings(QCoreApplication::organizationName(), QCoreApplication::applicationName());
-    httpClient->initRequester(settings.value("server", "nseha.linkpc.net").toString(),
-                              settings.value("port", 22379).toInt(),
-                              nullptr);
-}
-
 
 void MainWindow::getDbData()
 {
-    Requester::handleFunc getData = [this](const QJsonObject &o){
-        this->wordlist = MainWindow::getKeys(o.value("node").toObject());
-        qDebug() << "Got obj" << this->wordlist.join(" ");
-        FuzzyCompleter *c = this->lineEdit->completer();
-        c->setUp(this->wordlist);
-        emit this->dataLoaded();
-    };
-    Requester::handleFunc errData = [this](const QJsonObject &o){
-        qDebug() << "Got err obj";
-        emit this->dataLoaded();
-    };
-
-    httpClient->sendRequest(
-                "v2/keys/?recursive=true&sorted=true",
-                getData,
-                errData);
-
+    QByteArray block;
+    QDataStream out(&block, QIODevice::WriteOnly);
+    out.setVersion(QDataStream::Qt_5_10);
+    out << QString("getall");
+    clientSocket->write(block);
+    clientSocket->flush();
+    if (clientSocket->waitForReadyRead()) {
+        wordlist.clear();
+        int dataLen = 0;
+        QString key;
+        in >> dataLen;
+        for (int i=1; i<dataLen; ++i) {
+            in >> key;
+            wordlist << key;
+        }
+        qDebug() << "Got all data from server: " << wordlist.join(" ");
+        FuzzyCompleter *c = lineEdit->completer();
+        c->cleanUp();
+        c->setUp(wordlist);
+    }
+    handleDataLoad();
 }
 
 void MainWindow::lockInput()
@@ -339,13 +342,11 @@ void MainWindow::hideEvent(QHideEvent *e) {
 void MainWindow::escapePressed() {
     clipboardData->setText("");
     lineEdit->setSelectedItem("");
-    this->hide();
+    doHide();
 }
 
-void MainWindow::EnterPressed() {
-    //this->~MainWindow();
-    qDebug() << "EnterPressed";
-
+void MainWindow::enterPressed() {
+    qDebug() << "Enter Pressed";
 
     if (clipboardData->toPlainText() != "") {
         QString key = lineEdit->text();
@@ -357,7 +358,7 @@ void MainWindow::EnterPressed() {
 
 }
 
-void MainWindow::SearchEvent() {
+void MainWindow::searchEvent() {
     FuzzyCompleter *c = lineEdit->completer();
     c->update(lineEdit->text());
     c->popup()->setCurrentIndex(c->popup()->model()->index(0,0));
@@ -368,10 +369,32 @@ void MainWindow::showSettings() {
     int r = s.exec();
     qDebug() << "Settings result: " << r << QDialog::Accepted;
     if (r == QDialog::Accepted) {
-        this->lockInput();
-        lineEdit->completer()->cleanUp();
-        this->connectDB();
-        this->getDbData();
+        QByteArray block;
+        QDataStream out(&block, QIODevice::WriteOnly);
+        out.setVersion(QDataStream::Qt_5_10);
+        out << QString("reload");
+        clientSocket->write(block);
+        clientSocket->flush();
+        if (clientSocket->waitForReadyRead()) {
+            wordlist.clear();
+            int dataLen = 0;
+            QString key;
+            in >> dataLen;
+            for (int i=1; i<=dataLen; ++i) {
+                in >> key;
+                wordlist.push_back(key);
+            }
+            qDebug() << "Got all data from server: " << wordlist.join(" ");
+            FuzzyCompleter *c = lineEdit->completer();
+            c->cleanUp();
+            c->setUp(wordlist);
+        }
+        handleDataLoad();
+
+
+        //this->lockInput();
+        //lineEdit->completer()->cleanUp();
+        //this->getDbData();
     }
 }
 

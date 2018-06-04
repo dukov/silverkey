@@ -36,19 +36,18 @@ void show_window(int argc, char *argv[], int fd = 0, bool child = false) {
         qDebug() << "Connected";
         twPtr.reset(new TrayWidget());
     } else {
-
         wPtr.reset(new MainWindow());
 
-    if (child) {
-        wPtr->setWriteFd(fd);
-    }
+        if (child) {
+            wPtr->setWriteFd(fd);
+        }
 
-    wPtr->setAttribute(Qt::WA_DeleteOnClose);
+        wPtr->setAttribute(Qt::WA_DeleteOnClose);
 
-    wPtr->show();
+        wPtr->show();
 
-    wPtr->raise();  // for MacOS
-    wPtr->activateWindow(); // for Windows
+        wPtr->raise();  // for MacOS
+        wPtr->activateWindow(); // for Windows
     }
 
     qDebug() << "Setting qApp event loop";
@@ -106,6 +105,15 @@ void main_with_fork(int argc, char *argv[]) {
 }
 #endif // SK_UI_FORK
 
+void main_tray(int argc, char *argv[])
+{
+/*    std::unique_ptr<QApplication> aPtr;
+    aPtr.reset(new QApplication(argc, argv));
+    //QApplication a(argc, argv);
+    TrayWidget *tw = new TrayWidget();
+    qDebug() << aPtr->exec();
+*/
+}
 
 
 int main(int argc, char *argv[])

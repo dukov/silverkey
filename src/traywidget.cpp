@@ -9,10 +9,15 @@
 TrayWidget::TrayWidget(QWidget *parent) : QDialog(parent)
 {
     httpClient = new Requester(this);
+
+    connect(this, &TrayWidget::dataUpdated, this, &TrayWidget::getAllData);
+
     createActions();
     createTrayIcon();
     initDbConnection();
+
     trayIcon->show();
+
     getAllData();
     setUpServer();
     qDebug() << "Server is listening: " << server->isListening();
@@ -83,13 +88,52 @@ void TrayWidget::readKey()
         out << dbData[key];
     } else if (method == "put") {
         out << QString("");
-    } else if (methos == "reload") {
-        out << QString("");
+        QString key;
+        QString val;
+        in >> key;
+        in >> val;
+        setVal(key, val);
+    } else if (method == "reload") {
+        initDbConnection();
+        getAllData();
+    } else if (method == "getall") {
+        qDebug() << "Sending all keys: " << dbData.keys().join(" ");
+        int dataLen = dbData.keys().length();
+        out << dataLen;
+        foreach (QString key, dbData.keys()) {
+            out << key;
+        }
     } else {
         out << QString("");
     }
     clientConnection->write(resp);
     clientConnection->flush();
+}
+
+void TrayWidget::setVal(QString key, QString val)
+{
+    Requester::handleFunc getData = [this](const QJsonObject &o) {
+        QString resp = o.value("node").toObject().value("value").toString();
+        qDebug() << "Successfully written data"<< resp;
+        emit this->dataUpdated();
+    };
+
+    Requester::handleFunc errData = [](const QJsonObject &o) {
+        qDebug() << "Error writing data";
+    };
+    QString path;
+    if (key[0] != '/') {
+        path = "v2/keys/" + key;
+    } else {
+        path = "v2/keys" + key;
+    }
+
+    QByteArray encodedVal = QUrl::toPercentEncoding(val);
+    httpClient->sendRequest(path,
+                            getData,
+                            errData,
+                            Requester::Type::PUT,
+                            "value=" + encodedVal);
 }
 
 void TrayWidget::createTrayIcon()
@@ -140,7 +184,8 @@ void TrayWidget::getAllData()
     Requester::handleFunc getData = [this](const QJsonObject &o){
         //this->wordlist = MainWindow::getKeys(o.value("node").toObject());
         dbData = TrayWidget::fillDbData(o.value("node").toObject());
-        qDebug() << "Got obj" << dbData.keys().join(" ");
+        qDebug() << "Got keys" << dbData.keys().join(" ");
+        //qDebug() << "Got values" << dbData.values().join(" ");
     };
     Requester::handleFunc errData = [this](const QJsonObject &o){
         qDebug() << "Got err obj";

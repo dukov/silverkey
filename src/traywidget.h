@@ -42,6 +42,7 @@ public:
     explicit TrayWidget(QWidget *parent = nullptr);
 
 signals:
+    void dataUpdated();
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -52,7 +53,7 @@ public slots:
     void updateCache();
     void clientConnected();
     void readKey();
-
+    void setVal(QString key, QString val);
 
 private:
     void createTrayIcon();

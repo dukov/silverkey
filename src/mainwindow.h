@@ -4,6 +4,8 @@
 #include <QMainWindow>
 #include <QDialog>
 #include <QTextEdit>
+#include <QLocalSocket>
+#include <QHBoxLayout>
 #include "fuzzycompleter.h"
 #include "requester.h"
 
@@ -23,23 +25,11 @@ class MainWindow : public QDialog
 
 public:
     explicit MainWindow(QWidget *parent = 0);
-    void EnterPressed();
-    void EndOfWorkflow();
-    void SearchEvent();
-    void hideEvent(QHideEvent *e);
     void setWriteFd(int fd);
     void setData(QString d);
-    void getDbData();
-    void showTextEdit();
-    static QStringList getKeys(const QJsonObject &o);
-    void getVal(QString key);
-    void setVal(QString key, QString val);
-    void connectDB();
 
-
-Q_SIGNALS:
-    void dataLoaded();
-    void gotReplyFromDB();
+protected:
+    void hideEvent(QHideEvent *e);
 
 public slots:
     void escapePressed();
@@ -49,20 +39,32 @@ public slots:
     void handleDataLoad();
     void doHide();
 
-
 private:
+    void createSettingsButton();
+    void createLineEdit();
+    void createAddButton();
+    void createTextEdit();
+    void enterPressed();
+    void searchEvent();
+    void getDbData();
+    void showTextEdit();
+    static QStringList getKeys(const QJsonObject &o);
+    void getVal(QString key);
+    void setVal(QString key, QString val);
+    QHBoxLayout *mainLayout;
     const int widgetPadding = 5;
     FuzzyLineEdit *lineEdit;
     QPushButton *settingsButton;
     QPushButton *addDataButton;
     QTextEdit *clipboardData;
-    Requester *httpClient;
     void lockInput();
     void unlockInput();
     Q_OBJECT
     QStringList wordlist;
     int wfd;
     QString data = "";
+    QLocalSocket *clientSocket;
+    QDataStream in;
 };
 
 #endif // MAINWINDOW_H
