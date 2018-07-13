@@ -7,6 +7,8 @@ SKSettings::SKSettings(QWidget *parent) :
     ui(new Ui::SKSettings)
 {
     ui->setupUi(this);
+    QString version(GIT_VERSION);
+    ui->skLbVersion->setText(version);
     QSettings settings(QCoreApplication::organizationName(), QCoreApplication::applicationName());
     ui->skUser->setText(settings.value("user", "").toString());
     ui->skPassword->setText(settings.value("password", "").toString());

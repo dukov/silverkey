@@ -51,6 +51,10 @@ LIBS += \
 
 DEFINES += ROBOT_ARCH_64
 
+GIT_VERSION = $$system(git --git-dir $$PWD/../.git --work-tree $$PWD/.. rev-parse --short HEAD)
+
+DEFINES += GIT_VERSION='\\"$$GIT_VERSION\\"'
+
 macx {
     HEADERS += \
             mac_service.h \
